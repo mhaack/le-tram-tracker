@@ -266,6 +266,27 @@ LVB_TRAM_LINES.forEach(num => {
 const tramLinesToggleBtn = document.getElementById('tram-lines-toggle');
 syncTramLinesVisibility();
 
+// ── localStorage persistence ──────────────────────────────────────────────────
+function saveTramLineState() {
+  localStorage.setItem('tramLines', JSON.stringify([...activeTramLines]));
+}
+
+// Restore saved selection, or activate all lines on first visit.
+(function restoreTramLineState() {
+  const saved = localStorage.getItem('tramLines');
+  const toActivate = saved !== null ? JSON.parse(saved) : LVB_TRAM_LINES;
+  for (const num of toActivate) {
+    const chip = tramLinesEl.querySelector(`[data-line="${num}"]`);
+    if (!chip) continue;
+    const color = LVB_TRAM_COLORS[num];
+    activeTramLines.add(num);
+    chip.classList.add('active');
+    chip.style.backgroundColor = color + '33';
+    showRoute(num, color);
+  }
+  tramLinesToggleBtn.textContent = activeTramLines.size === LVB_TRAM_LINES.length ? 'Hide all' : 'Show all';
+})();
+
 function toggleTramLine(num, chip, color) {
   if (activeTramLines.has(num)) {
     activeTramLines.delete(num);
@@ -280,6 +301,7 @@ function toggleTramLine(num, chip, color) {
   }
   // Keep show/hide all label in sync
   tramLinesToggleBtn.textContent = activeTramLines.size === LVB_TRAM_LINES.length ? 'Hide all' : 'Show all';
+  saveTramLineState();
   // Re-render departure board (client-side filter)
   if (activeStationId && activePopupEl) renderDepartures(activeStationName, activePopupEl);
 }
@@ -315,6 +337,7 @@ tramLinesToggleBtn.addEventListener('click', () => {
     }
     tramLinesToggleBtn.textContent = 'Hide all';
   }
+  saveTramLineState();
   if (activeStationId && activePopupEl) renderDepartures(activeStationName, activePopupEl);
 });
 

@@ -11,23 +11,36 @@ npm run dev        # run with auto-restart on file changes (node --watch)
 
 No tests or linter configured.
 
+## Structure
+
+```
+src/
+  server.js        # Express API + GTFS startup
+  gtfs.js          # GTFS download, parse, in-memory index
+public/
+  index.html       # Frontend (Leaflet map, vanilla JS)
+  style.css        # All styles (CSS custom properties for theming)
+```
+
+GTFS zip is cached at the project root as `gtfs_mdv.zip`.
+
 ## Architecture
 
-Single-file backend + single-file frontend, no build step.
-
-**`server.js`** — Express API. Loads GTFS at startup (blocking), then starts listening. Four endpoints:
+**`src/server.js`** — Express API. Loads GTFS at startup (blocking), then starts listening. Four endpoints:
 - `GET /api/stations?q=` — hafas location search
 - `GET /api/departures?id=&duration=&products=` — live departures; `products` is a comma-separated list (`tram,suburban,bus`) used to build the hafas products filter
 - `GET /api/nearby?lat=&lng=` — hafas nearby stops
 - `GET /api/tram-route/:line` — serves pre-parsed GTFS route data from in-memory `tramRouteData`
 
-**`gtfs.js`** — GTFS module. Downloads `gtfs_mdv.zip` once to disk, parses it at startup into `tramRouteData: Map<lineNum, { outbound, inbound }>` where each direction has `{ stops, shape }`. Critical gotcha: **always pick the trip with the most stop_times entries** per route+direction — the first trip in file order is almost always a short-turn. Filter routes by `agency_id === '01130'` (LVB = Leipziger Verkehrsbetriebe) to avoid picking up identically-named lines from other operators in the MDV region. MDV GTFS has no `shapes.txt`, so route polylines are straight lines between stop coordinates.
+**`src/gtfs.js`** — GTFS module. Downloads `gtfs_mdv.zip` once to disk, parses it at startup into `tramRouteData: Map<lineNum, { outbound, inbound }>` where each direction has `{ stops, shape }`. Critical gotcha: **always pick the trip with the most stop_times entries** per route+direction — the first trip in file order is almost always a short-turn. Filter routes by `agency_id === '01130'` (LVB = Leipziger Verkehrsbetriebe) to avoid picking up identically-named lines from other operators in the MDV region. MDV GTFS has no `shapes.txt`, so route polylines are straight lines between stop coordinates.
 
-**`public/index.html`** — Self-contained frontend. Key state:
+**`public/index.html`** — Frontend. Key state:
 - `activeProducts` — which transport types are backend-filtered (`tram`, `suburban`, `bus`)
-- `activeTramLines: Set` — which line numbers are selected; empty = no filter (show all); non-empty = filter departures AND show route overlays on map
+- `activeTramLines: Set` — which line numbers are selected; empty = no filter (show all); non-empty = filter departures AND show route overlays on map. Persisted to `localStorage` key `tramLines`. All lines are activated on first visit (no saved state).
 - `lastRawDepartures` — cached raw API response; tram line chip filter re-renders from this without re-fetching
 - `routeLayers: Map<lineNum, { polylineGroup, stopGroup }>` — active Leaflet layers per line
+
+**`public/style.css`** — All styles using CSS custom properties. Dark mode is the default (`:root`); `body.light` overrides variables for light mode. The theme toggle button swaps the Leaflet tile layer between CartoDB dark and light.
 
 Departure display flow: `loadDepartures()` fetches from API → stores in `lastRawDepartures` → calls `renderDepartures()`. Toggling tram line chips calls `renderDepartures()` directly (client-side only). Toggling transport type chips calls `loadDepartures()` (backend re-fetch needed).
 

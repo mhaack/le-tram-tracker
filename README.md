@@ -7,15 +7,16 @@ A live public transport tracker for Leipzig, showing real-time departures and tr
 - **Station search** — find any stop in the MDV network by name
 - **Live departures** — real-time departure board with delays, per stop
 - **Transport filters** — toggle Tram / S-Bahn / Bus; active types are sent to the backend so hafas only returns relevant services
-- **Tram line selector** — individual LVB line chips (1–16) in official line colors; selecting a line draws its full route on the map and filters the departure board
+- **Tram line selector** — individual LVB line chips (1–16) in official line colors; selecting a line draws its full route on the map and filters the departure board. Selection is persisted in `localStorage` and all lines are on by default on first visit.
 - **Route overlay** — GTFS-derived polyline + clickable stop dots per line; clicking a stop opens its departure board
 - **Nearby stops** — shown automatically when selecting a station; right-click anywhere on the map to discover stops at that location
 - **Auto-refresh** — open departure popups refresh every 30 seconds
+- **Light/dark mode** — toggle in the top-right of the header; switches map tiles and UI theme
 
 ## Stack
 
 - **Backend**: Node.js (ESM), Express, [hafas-client](https://github.com/public-transport/hafas-client) with the INSA profile
-- **Frontend**: Single HTML file — Leaflet 1.9.4, vanilla JS, CartoDB dark tiles, no build step
+- **Frontend**: `public/index.html` + `public/style.css` — Leaflet 1.9.4, vanilla JS, CartoDB tiles, no build step
 - **GTFS**: MDV open data ([CC BY 4.0](https://www.mdv.de/service/downloads/)), downloaded once at startup and cached to disk
 
 ## Getting started
