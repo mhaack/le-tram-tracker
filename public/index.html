@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leipzig Transit Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      z-index: 1000;
+      flex-shrink: 0;
+    }
+
+    .header-row {
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #a78bfa;
+      white-space: nowrap;
+    }
+
+    .search-wrapper {
+      position: relative;
+      flex: 1;
+      max-width: 460px;
+    }
+
+    #search-input {
+      width: 100%;
+      padding: 7px 14px 7px 34px;
+      border-radius: 8px;
+      border: 1px solid #2d3148;
+      background: #0f1117;
+      color: #e2e8f0;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #search-input:focus { border-color: #7c3aed; }
+    #search-input::placeholder { color: #4a5068; }
+
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #4a5068;
+      font-size: 0.8rem;
+      pointer-events: none;
+    }
+
+    #suggestions {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      overflow: hidden;
+      z-index: 3000;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+
+    .suggestion-item {
+      padding: 9px 14px;
+      cursor: pointer;
+      font-size: 0.84rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #1e2235;
+      transition: background 0.12s;
+    }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover { background: #252840; }
+
+    .spinner {
+      display: none;
+      width: 15px;
+      height: 15px;
+      border: 2px solid #2d3148;
+      border-top-color: #7c3aed;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    .spinner.active { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+      padding: 6px 16px 8px;
+      border-top: 1px solid #1e2235;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-sep {
+      width: 1px;
+      height: 18px;
+      background: #2d3148;
+      margin: 0 2px;
+      flex-shrink: 0;
+    }
+
+    /* Transport type chips */
+    .type-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      border: 1.5px solid #2d3148;
+      background: transparent;
+      color: #64748b;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .type-chip:hover { border-color: #4a5068; color: #94a3b8; }
+    .type-chip.active {
+      background: #252840;
+      color: #e2e8f0;
+      border-color: #7c3aed;
+    }
+    .type-chip.active[data-product="tram"]     { border-color: #4ade80; color: #4ade80; background: rgba(74,222,128,0.1); }
+    .type-chip.active[data-product="suburban"] { border-color: #818cf8; color: #818cf8; background: rgba(129,140,248,0.1); }
+    .type-chip.active[data-product="bus"]      { border-color: #60a5fa; color: #60a5fa; background: rgba(96,165,250,0.1); }
+
+    /* Tram line chips */
+    #tram-lines {
+      display: none;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    #tram-lines.visible { display: flex; }
+
+    .line-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 26px;
+      height: 22px;
+      padding: 0 6px;
+      border-radius: 5px;
+      border: 1.5px solid transparent;
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      opacity: 0.35;
+    }
+    .line-chip.active { opacity: 1; }
+    .line-chip:hover  { opacity: 0.75; }
+    .line-chip.active:hover { opacity: 0.85; }
+
+    /* ── Map ── */
+    #map { flex: 1; min-height: 0; }
+
+    /* ── Popup ── */
+    .leaflet-popup-content-wrapper {
+      background: #1a1d27;
+      color: #e2e8f0;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    .leaflet-popup-tip { background: #1a1d27; }
+    .leaflet-popup-content { margin: 12px 14px; min-width: 250px; }
+
+    .popup-header {
+      font-weight: 700;
+      font-size: 0.92rem;
+      margin-bottom: 10px;
+      color: #a78bfa;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .popup-refresh {
+      font-size: 0.72rem;
+      cursor: pointer;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid #2d3148;
+      background: none;
+      color: #7c3aed;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .popup-refresh:hover { background: #252840; }
+
+    .departure-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 0;
+      border-bottom: 1px solid #1e2235;
+      font-size: 0.81rem;
+    }
+    .departure-row:last-child { border-bottom: none; }
+
+    .line-badge {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      min-width: 34px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .direction { flex: 1; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dep-time  { font-weight: 600; flex-shrink: 0; }
+    .delay-on-time { color: #34d399; font-size: 0.72rem; flex-shrink: 0; }
+    .delay-late    { color: #f87171; font-size: 0.72rem; flex-shrink: 0; }
+
+    .popup-loading {
+      text-align: center;
+      padding: 20px 0;
+      color: #4a5068;
+      font-size: 0.85rem;
+    }
+    .popup-spinner {
+      width: 20px; height: 20px;
+      border: 2px solid #2d3148;
+      border-top-color: #7c3aed;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 8px;
+    }
+    .no-departures { color: #4a5068; font-size: 0.84rem; text-align: center; padding: 14px 0; }
+
+    /* Route stop dots — pointer cursor */
+    .leaflet-pane .leaflet-interactive[r] { cursor: pointer; }
+
+    /* Route stop tooltip */
+    .route-stop-tooltip {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 5px;
+      color: #e2e8f0;
+      font-size: 0.75rem;
+      padding: 3px 7px;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .route-stop-tooltip::before { display: none; }
+
+    /* Leaflet control overrides */
+    .leaflet-control-zoom a { background: #1a1d27 !important; color: #a78bfa !important; border-color: #2d3148 !important; }
+    .leaflet-control-zoom a:hover { background: #252840 !important; }
+    .leaflet-control-attribution { background: rgba(15,17,23,0.8) !important; color: #4a5068 !important; }
+    .leaflet-control-attribution a { color: #7c3aed !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <h1>Leipzig Transit</h1>
+    <div class="search-wrapper">
+      <span class="search-icon">🔍</span>
+      <input id="search-input" type="text" placeholder="Search station…" autocomplete="off" />
+      <div id="suggestions"></div>
+    </div>
+    <div class="spinner" id="spinner"></div>
+  </div>
+
+  <div class="filter-bar">
+    <button class="type-chip active" data-product="tram">🚋 Tram</button>
+    <button class="type-chip active" data-product="suburban">🚆 S-Bahn</button>
+    <button class="type-chip" data-product="bus">🚌 Bus</button>
+    <div class="filter-sep"></div>
+    <button id="tram-lines-toggle" class="type-chip" style="display:none">Show all</button>
+    <div id="tram-lines"></div>
+  </div>
+</header>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API = '';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const LVB_TRAM_LINES = ['1','2','3','4','7','8','9','10','11','12','14','15','16'];
+
+const LVB_TRAM_COLORS = {
+  '1':  '#E2001A',
+  '2':  '#005CA9',
+  '3':  '#F39200',
+  '4':  '#00963F',
+  '7':  '#9F1981',
+  '8':  '#00A0B0',
+  '9':  '#7A1315',
+  '10': '#F7A600',
+  '11': '#009FE3',
+  '12': '#6E1C82',
+  '14': '#E2001A',
+  '15': '#00963F',
+  '16': '#005CA9',
+};
+
+const SBAHN_COLORS = {
+  'S1': '#6A0DAD', 'S2': '#4527A0', 'S3': '#7B1FA2',
+  'S4': '#4A148C', 'S5': '#6200EA', 'S5X': '#6200EA', 'S6': '#5E35B1',
+};
+
+// ── Filter state ──────────────────────────────────────────────────────────────
+const activeProducts = { tram: true, suburban: true, bus: false };
+// Empty set = show all tram lines; populated = show only those lines
+const activeTramLines = new Set();
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([51.3397, 12.3731], 13);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/">OSM</a>',
+  maxZoom: 19,
+}).addTo(map);
+
+// ── Marker / popup state ──────────────────────────────────────────────────────
+let markers = [];
+let activeStationId = null;
+let activeStationName = null;
+let activePopupEl = null;
+let lastRawDepartures = [];   // cache from last fetch
+let refreshTimer = null;
+const routeLayers = new Map(); // lineNum → { polyline, stopGroup }
+
+// ── Line color helper ─────────────────────────────────────────────────────────
+function lineColor(line) {
+  if (!line) return { bg: '#6b7280', text: '#fff' };
+  const name    = (line.name || '').trim();
+  const product = line.product || '';
+
+  if (product === 'tram') {
+    // Extract numeric part: "Str 16" → "16", "4" → "4"
+    const num = name.replace(/[^0-9]/g, '');
+    if (LVB_TRAM_COLORS[num]) return { bg: LVB_TRAM_COLORS[num], text: '#fff' };
+  }
+  if (product === 'suburban') {
+    const key = name.replace(/\s/g, '');   // "S 1" → "S1"
+    if (SBAHN_COLORS[key]) return { bg: SBAHN_COLORS[key], text: '#fff' };
+    return { bg: '#4527A0', text: '#fff' };
+  }
+  if (product === 'bus') return { bg: '#1565C0', text: '#fff' };
+  return { bg: '#6b7280', text: '#fff' };
+}
+
+// ── Tram line number from a departure ────────────────────────────────────────
+function tramLineNum(dep) {
+  const name = dep.line?.name || '';
+  return name.replace(/[^0-9]/g, '');
+}
+
+// ── Build ?products= param from current state ─────────────────────────────────
+function buildProductsParam() {
+  return Object.entries(activeProducts)
+    .filter(([, on]) => on)
+    .map(([k]) => k)
+    .join(',');
+}
+
+// ── Apply client-side tram line filter ───────────────────────────────────────
+function applyTramFilter(deps) {
+  if (activeTramLines.size === 0) return deps;   // no chip selected = show all
+  return deps.filter(d => {
+    if (d.line?.product !== 'tram') return true; // non-tram always pass
+    return activeTramLines.has(tramLineNum(d));
+  });
+}
+
+// ── Render departures into popup element (no fetch) ───────────────────────────
+function renderDepartures(stationName, popupEl) {
+  const filtered = applyTramFilter(lastRawDepartures).slice(0, 10);
+
+  if (filtered.length === 0) {
+    popupEl.innerHTML = `
+      <div class="popup-header">
+        <span>${stationName}</span>
+        <button class="popup-refresh" onclick="refreshActive()">↻</button>
+      </div>
+      <div class="no-departures">No departures match current filters</div>
+    `;
+    return;
+  }
+
+  const rows = filtered.map(d => {
+    const delayMin = d.delay ? Math.round(d.delay / 60) : 0;
+    const { bg, text } = lineColor(d.line);
+    const delayHtml = delayMin > 0
+      ? `<span class="delay-late">+${delayMin}min</span>`
+      : `<span class="delay-on-time">on time</span>`;
+    return `
+      <div class="departure-row">
+        <span class="line-badge" style="background:${bg};color:${text}">${d.line?.name ?? '?'}</span>
+        <span class="direction">${d.direction ?? ''}</span>
+        <span class="dep-time">${formatTime(d.when)}</span>
+        ${delayHtml}
+      </div>`;
+  }).join('');
+
+  popupEl.innerHTML = `
+    <div class="popup-header">
+      <span>${stationName}</span>
+      <button class="popup-refresh" onclick="refreshActive()">↻</button>
+    </div>
+    ${rows}
+  `;
+}
+
+// ── Fetch departures then render ──────────────────────────────────────────────
+async function loadDepartures(stationId, stationName, popupEl) {
+  popupEl.innerHTML = `
+    <div class="popup-header"><span>${stationName}</span></div>
+    <div class="popup-loading"><div class="popup-spinner"></div>Loading…</div>
+  `;
+
+  const productsParam = buildProductsParam();
+  const url = `${API}/api/departures?id=${encodeURIComponent(stationId)}&duration=30`
+    + (productsParam ? `&products=${encodeURIComponent(productsParam)}` : '');
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(await res.text());
+    lastRawDepartures = await res.json();
+    renderDepartures(stationName, popupEl);
+  } catch (err) {
+    popupEl.innerHTML = `
+      <div class="popup-header"><span>${stationName}</span></div>
+      <div class="no-departures" style="color:#f87171">Error: ${err.message}</div>
+    `;
+  }
+}
+
+// ── Refresh helpers ───────────────────────────────────────────────────────────
+function refreshActive() {
+  if (!activeStationId || !activePopupEl) return;
+  loadDepartures(activeStationId, activeStationName, activePopupEl);
+}
+
+function scheduleRefresh() {
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    if (activeStationId && activePopupEl) refreshActive();
+  }, 30000);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function spinner(on) { document.getElementById('spinner').classList.toggle('active', on); }
+
+function formatTime(when) {
+  if (!when) return '–';
+  return new Date(when).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function createMarkerIcon(color = '#7c3aed') {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.5)"></div>`,
+    iconSize: [12, 12], iconAnchor: [6, 6],
+  });
+}
+
+// ── Filter bar: transport type chips ─────────────────────────────────────────
+document.querySelectorAll('.type-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const product = btn.dataset.product;
+    activeProducts[product] = !activeProducts[product];
+    btn.classList.toggle('active', activeProducts[product]);
+
+    // Show/hide tram line row
+    if (product === 'tram') syncTramLinesVisibility();
+
+    // Re-fetch if a station popup is open (product filter is backend)
+    if (activeStationId && activePopupEl) refreshActive();
+  });
+});
+
+// ── Filter bar: tram line chips ───────────────────────────────────────────────
+const tramLinesEl = document.getElementById('tram-lines');
+
+// Chips start dim/off — clicking one toggles it on, shows the route on map,
+// and adds it to the departure filter (empty set = no filter = show all).
+LVB_TRAM_LINES.forEach(num => {
+  const color = LVB_TRAM_COLORS[num];
+  const chip = document.createElement('button');
+  chip.className = 'line-chip';    // dim by default
+  chip.dataset.line = num;
+  chip.textContent = num;
+  chip.style.backgroundColor = 'transparent';
+  chip.style.borderColor = color;
+  chip.style.color = color;
+  chip.addEventListener('click', () => toggleTramLine(num, chip, color));
+  tramLinesEl.appendChild(chip);
+});
+
+const tramLinesToggleBtn = document.getElementById('tram-lines-toggle');
+syncTramLinesVisibility();
+
+function toggleTramLine(num, chip, color) {
+  if (activeTramLines.has(num)) {
+    activeTramLines.delete(num);
+    chip.classList.remove('active');
+    chip.style.backgroundColor = 'transparent';
+    hideRoute(num);
+  } else {
+    activeTramLines.add(num);
+    chip.classList.add('active');
+    chip.style.backgroundColor = color + '33';
+    showRoute(num, color);
+  }
+  // Keep show/hide all label in sync
+  tramLinesToggleBtn.textContent = activeTramLines.size === LVB_TRAM_LINES.length ? 'Hide all' : 'Show all';
+  // Re-render departure board (client-side filter)
+  if (activeStationId && activePopupEl) renderDepartures(activeStationName, activePopupEl);
+}
+
+function syncTramLinesVisibility() {
+  const on = activeProducts.tram;
+  tramLinesEl.classList.toggle('visible', on);
+  tramLinesToggleBtn.style.display = on ? '' : 'none';
+}
+
+// ── Show/hide all tram lines button ──────────────────────────────────────────
+tramLinesToggleBtn.addEventListener('click', () => {
+  const anyActive = activeTramLines.size > 0;
+  if (anyActive) {
+    // Hide all
+    for (const chip of tramLinesEl.querySelectorAll('.line-chip.active')) {
+      const num = chip.dataset.line;
+      activeTramLines.delete(num);
+      chip.classList.remove('active');
+      chip.style.backgroundColor = 'transparent';
+      hideRoute(num);
+    }
+    tramLinesToggleBtn.textContent = 'Show all';
+  } else {
+    // Show all
+    for (const chip of tramLinesEl.querySelectorAll('.line-chip')) {
+      const num = chip.dataset.line;
+      const color = LVB_TRAM_COLORS[num];
+      activeTramLines.add(num);
+      chip.classList.add('active');
+      chip.style.backgroundColor = color + '33';
+      showRoute(num, color);
+    }
+    tramLinesToggleBtn.textContent = 'Hide all';
+  }
+  if (activeStationId && activePopupEl) renderDepartures(activeStationName, activePopupEl);
+});
+
+// ── Route overlay (GTFS) ──────────────────────────────────────────────────────
+async function showRoute(lineNum, color) {
+  if (routeLayers.has(lineNum)) return; // already on map
+
+  let data;
+  try {
+    const res = await fetch(`${API}/api/tram-route/${lineNum}`);
+    if (!res.ok) return;
+    data = await res.json();
+  } catch { return; }
+
+  // Use outbound; fall back to inbound if outbound is missing
+  const route = data.outbound ?? data.inbound;
+  if (!route?.shape?.length) return;
+
+  const polylines = [];
+  const stopGroup = L.layerGroup();
+
+  polylines.push(L.polyline(route.shape, {
+    color, weight: 4, opacity: 0.8, interactive: false,
+  }));
+
+  for (const stop of route.stops) {
+    L.circleMarker([stop.lat, stop.lon], {
+      radius: 6,
+      color: '#fff',
+      weight: 1.5,
+      fillColor: color,
+      fillOpacity: 0.9,
+      interactive: true,
+    })
+    .bindTooltip(stop.name.replace(/^Leipzig,\s+/i, ''), {
+      direction: 'top', offset: [0, -6], className: 'route-stop-tooltip',
+    })
+    .on('click', () => openStopDepartures(stop))
+    .addTo(stopGroup);
+  }
+
+  const polylineGroup = L.layerGroup(polylines).addTo(map);
+  stopGroup.addTo(map);
+
+  routeLayers.set(lineNum, { polylineGroup, stopGroup });
+}
+
+function hideRoute(lineNum) {
+  const layers = routeLayers.get(lineNum);
+  if (!layers) return;
+  map.removeLayer(layers.polylineGroup);
+  map.removeLayer(layers.stopGroup);
+  routeLayers.delete(lineNum);
+}
+
+async function openStopDepartures(stop) {
+  // Strip GTFS city prefix and mode suffix for a clean search query
+  // e.g. "Leipzig, Connewitz, Kreuz (Tram)" → "Connewitz, Kreuz"
+  const searchName = stop.name
+    .replace(/^Leipzig,\s+/i, '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .trim();
+
+  // Open a loading popup immediately at the stop location
+  const popupDiv = document.createElement('div');
+  popupDiv.innerHTML = `
+    <div class="popup-header"><span>${searchName}</span></div>
+    <div class="popup-loading"><div class="popup-spinner"></div>Finding station…</div>
+  `;
+  L.popup({ maxWidth: 330, minWidth: 260 })
+    .setLatLng([stop.lat, stop.lon])
+    .setContent(popupDiv)
+    .openOn(map);
+
+  try {
+    const res = await fetch(`${API}/api/stations?q=${encodeURIComponent(searchName)}`);
+    if (!res.ok) throw new Error('Station search failed');
+    const stations = await res.json();
+    if (!stations.length) throw new Error('No matching station found');
+
+    // Pick the result closest to the GTFS stop coordinates
+    const closest = stations
+      .filter(s => s.location)
+      .reduce((best, s) => {
+        const d = Math.hypot(s.location.latitude - stop.lat, s.location.longitude - stop.lon);
+        const bd = Math.hypot(best.location.latitude - stop.lat, best.location.longitude - stop.lon);
+        return d < bd ? s : best;
+      });
+
+    activeStationId   = closest.id;
+    activeStationName = searchName;
+    activePopupEl     = popupDiv;
+    await loadDepartures(closest.id, searchName, popupDiv);
+    scheduleRefresh();
+  } catch (err) {
+    popupDiv.innerHTML = `
+      <div class="popup-header"><span>${searchName}</span></div>
+      <div class="no-departures" style="color:#f87171">${err.message}</div>
+    `;
+  }
+}
+
+// ── Place markers ─────────────────────────────────────────────────────────────
+function clearMarkers() {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  clearInterval(refreshTimer);
+  activeStationId = null;
+  activeStationName = null;
+  activePopupEl = null;
+  lastRawDepartures = [];
+}
+
+function placeStationMarker(station) {
+  if (!station.location) return null;
+  const { latitude: lat, longitude: lng } = station.location;
+  const name = station.name;
+
+  const marker = L.marker([lat, lng], { icon: createMarkerIcon() });
+  marker._stationId = station.id;
+  marker._stationName = name;
+
+  const popupDiv = document.createElement('div');
+  popupDiv.innerHTML = `<div class="popup-loading"><div class="popup-spinner"></div>Loading…</div>`;
+  marker.bindPopup(L.popup({ maxWidth: 330, minWidth: 260 }).setContent(popupDiv));
+
+  marker.on('click', () => {
+    activeStationId = station.id;
+    activeStationName = name;
+    activePopupEl = popupDiv;
+    loadDepartures(station.id, name, popupDiv);
+    scheduleRefresh();
+  });
+
+  marker.addTo(map);
+  markers.push(marker);
+  return marker;
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+const searchInput = document.getElementById('search-input');
+const suggestionsEl = document.getElementById('suggestions');
+let searchTimeout;
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  const q = searchInput.value.trim();
+  if (q.length < 2) { suggestionsEl.innerHTML = ''; return; }
+  searchTimeout = setTimeout(() => doSearch(q), 350);
+});
+
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { suggestionsEl.innerHTML = ''; searchInput.blur(); }
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrapper')) suggestionsEl.innerHTML = '';
+});
+
+async function doSearch(q) {
+  spinner(true);
+  try {
+    const res = await fetch(`${API}/api/stations?q=${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error('Search failed');
+    const stations = await res.json();
+
+    suggestionsEl.innerHTML = stations.map((s, i) =>
+      `<div class="suggestion-item" data-idx="${i}">
+        <span style="font-size:0.9rem">🚉</span>
+        <span>${s.name}</span>
+      </div>`
+    ).join('');
+
+    suggestionsEl.querySelectorAll('.suggestion-item').forEach((el, i) => {
+      el.addEventListener('click', () => selectStation(stations[i]));
+    });
+  } catch (err) {
+    suggestionsEl.innerHTML = `<div class="suggestion-item" style="color:#f87171">${err.message}</div>`;
+  } finally {
+    spinner(false);
+  }
+}
+
+async function selectStation(station) {
+  suggestionsEl.innerHTML = '';
+  searchInput.value = station.name;
+  clearMarkers();
+
+  const marker = placeStationMarker(station);
+  if (!marker) return;
+
+  const { latitude: lat, longitude: lng } = station.location;
+  map.setView([lat, lng], 16, { animate: true });
+
+  try {
+    const res = await fetch(`${API}/api/nearby?lat=${lat}&lng=${lng}`);
+    if (res.ok) {
+      const nearby = await res.json();
+      nearby.forEach(stop => { if (stop.id !== station.id) placeStationMarker(stop); });
+    }
+  } catch (_) {}
+
+  marker.openPopup();
+  activeStationId = station.id;
+  activeStationName = station.name;
+  // popupDiv is the DOM node passed to setContent — use it directly
+  activePopupEl = marker._popup._content;
+  loadDepartures(station.id, station.name, activePopupEl);
+  scheduleRefresh();
+}
+
+// ── Right-click map → nearby stops ───────────────────────────────────────────
+map.on('contextmenu', async e => {
+  const { lat, lng } = e.latlng;
+  spinner(true);
+  clearMarkers();
+  try {
+    const res = await fetch(`${API}/api/nearby?lat=${lat}&lng=${lng}`);
+    if (!res.ok) throw new Error('Nearby failed');
+    const stops = await res.json();
+    stops.forEach(s => placeStationMarker(s));
+    if (stops.length === 0) {
+      L.popup().setLatLng([lat, lng])
+        .setContent('<div style="color:#4a5068;font-size:0.85rem;padding:4px">No stops nearby</div>')
+        .openOn(map);
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    spinner(false);
+  }
+});
+</script>
+</body>
+</html>
