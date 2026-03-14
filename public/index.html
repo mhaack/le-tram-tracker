@@ -6,12 +6,48 @@
   <title>Leipzig Transit Tracker</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
+    :root {
+      --bg:           #0f1117;
+      --surface:      #1a1d27;
+      --surface2:     #252840;
+      --border:       #2d3148;
+      --border2:      #1e2235;
+      --text:         #e2e8f0;
+      --text-muted:   #64748b;
+      --text-dim:     #4a5068;
+      --text-sec:     #cbd5e1;
+      --text-sec2:    #94a3b8;
+      --accent:       #7c3aed;
+      --accent-light: #a78bfa;
+      --ontime:       #34d399;
+      --late:         #f87171;
+      --attr-bg:      rgba(15,17,23,0.85);
+    }
+
+    body.light {
+      --bg:           #f1f5f9;
+      --surface:      #ffffff;
+      --surface2:     #f8fafc;
+      --border:       #e2e8f0;
+      --border2:      #f1f5f9;
+      --text:         #0f172a;
+      --text-muted:   #64748b;
+      --text-dim:     #94a3b8;
+      --text-sec:     #334155;
+      --text-sec2:    #475569;
+      --accent:       #6d28d9;
+      --accent-light: #7c3aed;
+      --ontime:       #16a34a;
+      --late:         #dc2626;
+      --attr-bg:      rgba(255,255,255,0.85);
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0f1117;
-      color: #e2e8f0;
+      background: var(--bg);
+      color: var(--text);
       height: 100vh;
       display: flex;
       flex-direction: column;
@@ -19,8 +55,8 @@
 
     /* ── Header ── */
     header {
-      background: #1a1d27;
-      border-bottom: 1px solid #2d3148;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
       z-index: 1000;
       flex-shrink: 0;
     }
@@ -35,7 +71,7 @@
     header h1 {
       font-size: 1.05rem;
       font-weight: 700;
-      color: #a78bfa;
+      color: var(--accent-light);
       white-space: nowrap;
     }
 
@@ -49,22 +85,22 @@
       width: 100%;
       padding: 7px 14px 7px 34px;
       border-radius: 8px;
-      border: 1px solid #2d3148;
-      background: #0f1117;
-      color: #e2e8f0;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
       font-size: 0.88rem;
       outline: none;
       transition: border-color 0.2s;
     }
-    #search-input:focus { border-color: #7c3aed; }
-    #search-input::placeholder { color: #4a5068; }
+    #search-input:focus { border-color: var(--accent); }
+    #search-input::placeholder { color: var(--text-dim); }
 
     .search-icon {
       position: absolute;
       left: 10px;
       top: 50%;
       transform: translateY(-50%);
-      color: #4a5068;
+      color: var(--text-dim);
       font-size: 0.8rem;
       pointer-events: none;
     }
@@ -74,12 +110,12 @@
       top: calc(100% + 4px);
       left: 0;
       right: 0;
-      background: #1a1d27;
-      border: 1px solid #2d3148;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 8px;
       overflow: hidden;
       z-index: 3000;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
     }
 
     .suggestion-item {
@@ -89,18 +125,18 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      border-bottom: 1px solid #1e2235;
+      border-bottom: 1px solid var(--border2);
       transition: background 0.12s;
     }
     .suggestion-item:last-child { border-bottom: none; }
-    .suggestion-item:hover { background: #252840; }
+    .suggestion-item:hover { background: var(--surface2); }
 
     .spinner {
       display: none;
       width: 15px;
       height: 15px;
-      border: 2px solid #2d3148;
-      border-top-color: #7c3aed;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       flex-shrink: 0;
@@ -108,10 +144,29 @@
     .spinner.active { display: block; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Theme toggle button ── */
+    #theme-toggle {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      font-size: 0.95rem;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s, border-color 0.15s;
+      padding: 0;
+    }
+    #theme-toggle:hover { background: var(--surface2); border-color: var(--accent); }
+
     /* ── Filter bar ── */
     .filter-bar {
       padding: 6px 16px 8px;
-      border-top: 1px solid #1e2235;
+      border-top: 1px solid var(--border2);
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -121,7 +176,7 @@
     .filter-sep {
       width: 1px;
       height: 18px;
-      background: #2d3148;
+      background: var(--border);
       margin: 0 2px;
       flex-shrink: 0;
     }
@@ -133,20 +188,20 @@
       gap: 4px;
       padding: 3px 10px;
       border-radius: 99px;
-      border: 1.5px solid #2d3148;
+      border: 1.5px solid var(--border);
       background: transparent;
-      color: #64748b;
+      color: var(--text-muted);
       font-size: 0.78rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.15s;
       white-space: nowrap;
     }
-    .type-chip:hover { border-color: #4a5068; color: #94a3b8; }
+    .type-chip:hover { border-color: var(--text-muted); color: var(--text-sec2); }
     .type-chip.active {
-      background: #252840;
-      color: #e2e8f0;
-      border-color: #7c3aed;
+      background: var(--surface2);
+      color: var(--text);
+      border-color: var(--accent);
     }
     .type-chip.active[data-product="tram"]     { border-color: #4ade80; color: #4ade80; background: rgba(74,222,128,0.1); }
     .type-chip.active[data-product="suburban"] { border-color: #818cf8; color: #818cf8; background: rgba(129,140,248,0.1); }
@@ -185,20 +240,20 @@
 
     /* ── Popup ── */
     .leaflet-popup-content-wrapper {
-      background: #1a1d27;
-      color: #e2e8f0;
-      border: 1px solid #2d3148;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
       border-radius: 10px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
     }
-    .leaflet-popup-tip { background: #1a1d27; }
+    .leaflet-popup-tip { background: var(--surface); }
     .leaflet-popup-content { margin: 12px 14px; min-width: 250px; }
 
     .popup-header {
       font-weight: 700;
       font-size: 0.92rem;
       margin-bottom: 10px;
-      color: #a78bfa;
+      color: var(--accent-light);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -210,20 +265,20 @@
       cursor: pointer;
       padding: 2px 7px;
       border-radius: 4px;
-      border: 1px solid #2d3148;
+      border: 1px solid var(--border);
       background: none;
-      color: #7c3aed;
+      color: var(--accent);
       transition: background 0.15s;
       flex-shrink: 0;
     }
-    .popup-refresh:hover { background: #252840; }
+    .popup-refresh:hover { background: var(--surface2); }
 
     .departure-row {
       display: flex;
       align-items: center;
       gap: 7px;
       padding: 5px 0;
-      border-bottom: 1px solid #1e2235;
+      border-bottom: 1px solid var(--border2);
       font-size: 0.81rem;
     }
     .departure-row:last-child { border-bottom: none; }
@@ -237,48 +292,48 @@
       text-align: center;
       flex-shrink: 0;
     }
-    .direction { flex: 1; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .direction { flex: 1; color: var(--text-sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dep-time  { font-weight: 600; flex-shrink: 0; }
-    .delay-on-time { color: #34d399; font-size: 0.72rem; flex-shrink: 0; }
-    .delay-late    { color: #f87171; font-size: 0.72rem; flex-shrink: 0; }
+    .delay-on-time { color: var(--ontime); font-size: 0.72rem; flex-shrink: 0; }
+    .delay-late    { color: var(--late);   font-size: 0.72rem; flex-shrink: 0; }
 
     .popup-loading {
       text-align: center;
       padding: 20px 0;
-      color: #4a5068;
+      color: var(--text-dim);
       font-size: 0.85rem;
     }
     .popup-spinner {
       width: 20px; height: 20px;
-      border: 2px solid #2d3148;
-      border-top-color: #7c3aed;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       margin: 0 auto 8px;
     }
-    .no-departures { color: #4a5068; font-size: 0.84rem; text-align: center; padding: 14px 0; }
+    .no-departures { color: var(--text-dim); font-size: 0.84rem; text-align: center; padding: 14px 0; }
 
     /* Route stop dots — pointer cursor */
     .leaflet-pane .leaflet-interactive[r] { cursor: pointer; }
 
     /* Route stop tooltip */
     .route-stop-tooltip {
-      background: #1a1d27;
-      border: 1px solid #2d3148;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 5px;
-      color: #e2e8f0;
+      color: var(--text);
       font-size: 0.75rem;
       padding: 3px 7px;
       white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
     .route-stop-tooltip::before { display: none; }
 
     /* Leaflet control overrides */
-    .leaflet-control-zoom a { background: #1a1d27 !important; color: #a78bfa !important; border-color: #2d3148 !important; }
-    .leaflet-control-zoom a:hover { background: #252840 !important; }
-    .leaflet-control-attribution { background: rgba(15,17,23,0.8) !important; color: #4a5068 !important; }
-    .leaflet-control-attribution a { color: #7c3aed !important; }
+    .leaflet-control-zoom a { background: var(--surface) !important; color: var(--accent-light) !important; border-color: var(--border) !important; }
+    .leaflet-control-zoom a:hover { background: var(--surface2) !important; }
+    .leaflet-control-attribution { background: var(--attr-bg) !important; color: var(--text-dim) !important; }
+    .leaflet-control-attribution a { color: var(--accent) !important; }
   </style>
 </head>
 <body>
@@ -292,6 +347,7 @@
       <div id="suggestions"></div>
     </div>
     <div class="spinner" id="spinner"></div>
+    <button id="theme-toggle" title="Toggle light/dark mode">☀️</button>
   </div>
 
   <div class="filter-bar">
@@ -342,10 +398,22 @@ const activeTramLines = new Set();
 // ── Map ───────────────────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: true }).setView([51.3397, 12.3731], 13);
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/">OSM</a>',
-  maxZoom: 19,
-}).addTo(map);
+const TILES = {
+  dark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+};
+const ATTRIBUTION = '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/">OSM</a>';
+
+let isDark = true;
+let tileLayer = L.tileLayer(TILES.dark, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  isDark = !isDark;
+  document.body.classList.toggle('light', !isDark);
+  document.getElementById('theme-toggle').textContent = isDark ? '☀️' : '🌙';
+  map.removeLayer(tileLayer);
+  tileLayer = L.tileLayer(isDark ? TILES.dark : TILES.light, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+});
 
 // ── Marker / popup state ──────────────────────────────────────────────────────
 let markers = [];
